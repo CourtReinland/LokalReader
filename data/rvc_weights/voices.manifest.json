@@ -1,0 +1,47 @@
+{
+  "comment": "Starter RVC character voices for fiction. Community .pth files often have unclear redistribution rights — LokalReader does not vendor them. `make setup-voices DOWNLOAD_STARTERS=1` downloads these Hugging Face files into this directory and writes matching .json sidecars.",
+  "hubert_repo": "lj1995/VoiceConversionWebUI",
+  "models": [
+    {
+      "id": "narrator",
+      "role": "narrator",
+      "gender": "male",
+      "description": "Steady fiction narrator timbre",
+      "hf_repo": "Its7up/Disco-Elysium-Narrator-RVC-v2",
+      "hf_files": ["de_narrator.pth"],
+      "rename_to": "narrator.pth",
+      "index_glob": "*.index",
+      "license_note": "Community model — verify terms before redistribution; for personal/local use."
+    },
+    {
+      "id": "young_female",
+      "role": "young_female",
+      "gender": "female",
+      "description": "Younger female dialogue timbre",
+      "hf_repo": "reddrumm/RVCModels",
+      "hf_files": ["Fern (EN).pth"],
+      "rename_to": "young_female.pth",
+      "license_note": "Community model — verify terms; place manually if download fails."
+    },
+    {
+      "id": "young_male",
+      "role": "young_male",
+      "gender": "male",
+      "description": "Younger male dialogue timbre",
+      "hf_repo": "reddrumm/RVCModels",
+      "hf_files": ["Stark (EN).pth"],
+      "rename_to": "young_male.pth",
+      "license_note": "Community model — verify terms; place manually if download fails."
+    },
+    {
+      "id": "older_narrator",
+      "role": "older_narrator",
+      "gender": "male",
+      "description": "Older / denser narrator timbre",
+      "hf_repo": "Its7up/Disco-Elysium-Narrator-RVC-v2",
+      "hf_files": ["de_narrator.pth"],
+      "rename_to": "older_narrator.pth",
+      "license_note": "Same family as narrator — swap for your own trained older voice when ready."
+    }
+  ]
+}

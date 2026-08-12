@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Example RVC infer CLI contract for LokalReader.
+"""Wiring-only RVC stub for CI / pipeline tests.
 
-Point LOKALREADER_RVC_INFER_SCRIPT at a real script from your
-Retrieval-based-Voice-Conversion-WebUI install (or wrap its infer API
-to match these flags).
+Copies the Piper TTS wav through unchanged. NOT a real timbre conversion.
+Production uses scripts/rvc_infer.py against a Python 3.12 RVC WebUI checkout.
 
 Usage:
   python rvc_infer_stub.py --model /path/to/voice.pth --input in.wav --output out.wav
-
-This stub copies the input wav to the output and exits 0, so you can
-verify wiring without a GPU / RVC environment.
 """
 
 from __future__ import annotations
@@ -20,10 +16,11 @@ from pathlib import Path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="LokalReader RVC infer contract (stub)")
+    parser = argparse.ArgumentParser(description="LokalReader RVC infer stub (passthrough)")
     parser.add_argument("--model", required=True, help="Path to .pth model")
-    parser.add_argument("--input", required=True, help="Input WAV from LocalTTS")
+    parser.add_argument("--input", required=True, help="Input WAV from Piper TTS")
     parser.add_argument("--output", required=True, help="Converted WAV output path")
+    parser.add_argument("--index", default="", help="Ignored in stub")
     args = parser.parse_args()
 
     src = Path(args.input)
@@ -35,7 +32,7 @@ def main() -> int:
         raise SystemExit(f"model missing: {model}")
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
-    print(f"[rvc-stub] copied {src} -> {dst} using model {model.name}")
+    print(f"[rvc-stub] PASSTHROUGH {src} -> {dst} (model {model.name}; not real RVC)")
     return 0
 
 

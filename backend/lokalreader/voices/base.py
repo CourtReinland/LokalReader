@@ -1,4 +1,4 @@
-"""VoiceBackend interface — TTS first, optional RVC timbre post-pass."""
+"""VoiceBackend interface — Piper neural TTS, then RVC timbre post-pass."""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ class VoiceBackend(ABC):
     """Produce speech audio from text.
 
     Correct architecture:
-      1) Base local TTS synthesizes WAV from text
-      2) Optional RVC converts that WAV into a character timbre
+      1) Piper neural TTS synthesizes WAV from text
+      2) RVC converts that WAV into a character timbre (.pth)
     RVC alone cannot synthesize speech from text.
+    macOS `say` / espeak are not part of this interface.
     """
 
     name: str = "base"

@@ -27,7 +27,7 @@
       <div class="hero-copy">
         <p class="brand-hero">LokalReader</p>
         <h1>Books that speak — on your machine, not in the cloud.</h1>
-        <p class="lede">Drop a novel or essay. Hear narration and dialogue in distinct local voices. No subscription. No account.</p>
+        <p class="lede">Drop a novel or essay. Hear narration and dialogue in distinct RVC character voices — neural TTS on your machine. No subscription. No account.</p>
         <div class="cta-row">
           <label class="btn primary" for="file-input">Open a book</label>
           <button type="button" class="btn ghost" id="btn-sample">Try the sample scene</button>
@@ -68,16 +68,13 @@
 
       <aside class="voice-panel" id="voice-panel" hidden>
         <h2>Voice mapping</h2>
-        <p class="hint">Assign a local voice to the narrator and each detected character. Edits save per book.</p>
+        <p class="hint">Assign an RVC character model to the narrator and each speaker. Pipeline: Piper neural TTS → RVC timbre. Edits save per book.</p>
+        <p class="hint" id="voice-status"></p>
         <label class="field">
           <span>Narrator</span>
           <select id="narrator-voice"></select>
         </label>
         <div id="character-voices"></div>
-        <label class="field checkbox">
-          <input type="checkbox" id="use-rvc" />
-          <span>Prefer RVC models when available</span>
-        </label>
         <p class="hint" id="rvc-hint"></p>
         <button type="button" class="btn primary compact" id="btn-save-voices">Save mapping</button>
       </aside>

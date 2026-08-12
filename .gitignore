@@ -1,4 +1,6 @@
 .venv/
+.venv-rvc/
+.rvc/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -7,11 +9,17 @@ __pycache__/
 data/books/**
 data/audio/**
 data/mappings/**
+data/piper_voices/**
 !data/books/.gitkeep
 !data/audio/.gitkeep
 !data/mappings/.gitkeep
+!data/piper_voices/.gitkeep
 data/rvc_weights/*.pth
+data/rvc_weights/*.index
+data/rvc_weights/*.json
 !data/rvc_weights/.gitkeep
+!data/rvc_weights/README.md
+!data/rvc_weights/voices.manifest.json
 *.egg-info/
 dist/
 build/

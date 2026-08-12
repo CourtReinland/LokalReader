@@ -12,6 +12,7 @@ from lokalreader import config
 from lokalreader.models import PlaybackRequest, SegmentUpdate, VoiceMapping
 from lokalreader.parsers.registry import SUPPORTED
 from lokalreader.storage.library import Library
+from lokalreader.voices.errors import VoiceSetupError
 from lokalreader.voices.service import VoiceService
 
 router = APIRouter(prefix="/api")
@@ -133,6 +134,11 @@ def synthesize(req: PlaybackRequest) -> dict:
         try:
             result = voices.synthesize_segment(req.book_id, seg, mapping, speed=req.speed)
             results.append(result.model_dump())
+        except VoiceSetupError as exc:
+            raise HTTPException(
+                503,
+                str(exc),
+            ) from exc
         except Exception as exc:
             raise HTTPException(500, f"TTS failed for segment {seg.id}: {exc}") from exc
     return {"segments": results, "count": len(results)}
