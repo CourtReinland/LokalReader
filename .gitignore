@@ -4,9 +4,12 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
-data/books/
-data/audio/
-data/mappings/
+data/books/**
+data/audio/**
+data/mappings/**
+!data/books/.gitkeep
+!data/audio/.gitkeep
+!data/mappings/.gitkeep
 data/rvc_weights/*.pth
 !data/rvc_weights/.gitkeep
 *.egg-info/
