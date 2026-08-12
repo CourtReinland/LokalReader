@@ -50,7 +50,9 @@ LokalReader calls `scripts/rvc_infer.py`, which runs:
 ```bash
 cd "$LOKALREADER_RVC_ROOT"
 PYTHONPATH="$LOKALREADER_RVC_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
-  "$LOKALREADER_RVC_PYTHON" -m infer.cli --model … --input … --output …
+  "$LOKALREADER_RVC_PYTHON" -m infer.cli --model … --input … --output … --index-rate 0
 ```
 
 Do **not** invoke `python infer/cli.py` directly — that leaves `import infer` broken (`No module named 'infer'`).
+
+`.index` files are optional. LokalReader ignores them unless `LOKALREADER_RVC_USE_INDEX=1` — FAISS retrieval has segfaulted (`exit 139`) with `faiss-cpu` on Apple Silicon.

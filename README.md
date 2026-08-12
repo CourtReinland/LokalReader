@@ -73,6 +73,7 @@ macOS system voices and espeak are **not** listed in `/api/voices` and are never
 | `LOKALREADER_RVC_WEIGHTS` | `data/rvc_weights` | Character `.pth` / `.index` |
 | `LOKALREADER_PIPER_VOICES` | `data/piper_voices` | Piper `.onnx` voices |
 | `LOKALREADER_RVC_INFER_SCRIPT` | `scripts/rvc_infer.py` | Bridge to `python -m infer.cli` |
+| `LOKALREADER_RVC_USE_INDEX` | off | If `1`, pass FAISS `.index` / `--index-rate` (can SIGSEGV on Apple Silicon) |
 | `LOKALREADER_ALLOW_EMERGENCY_TTS` | off | If `1`, expose labeled `piper:*` emergency voices (CI/dev only) |
 
 `make setup-voices` writes `.rvc/env.sh`; `make run` sources it when present.
@@ -83,7 +84,9 @@ source .rvc/env.sh
 make run
 ```
 
-### Troubleshooting RVC (`No module named 'infer'`)
+### Troubleshooting RVC
+
+#### `No module named 'infer'`
 
 `scripts/rvc_infer.py` must invoke RVC as a package from the WebUI checkout:
 
@@ -99,7 +102,15 @@ echo "$LOKALREADER_RVC_ROOT" "$LOKALREADER_RVC_PYTHON"
 "$LOKALREADER_RVC_PYTHON" -c "import sys; sys.path.insert(0, '$LOKALREADER_RVC_ROOT'); import infer.cli; print('infer ok')"
 ```
 
-Further dependency errors (torch, hubert, rmvpe, faiss) are reported in the API toast — re-run `make setup-voices` if assets are missing.
+#### Apple Silicon FAISS segfault (exit 139)
+
+On Apple Silicon, `faiss-cpu` index retrieval can crash the RVC subprocess (`SIGSEGV` / exit 139) when `--index` / `--index-rate 0.75` is used. LokalReader **defaults to `--index-rate 0`** (timbre conversion still works with `pm` or `rmvpe`). Only enable retrieval if you know your faiss build is stable:
+
+```bash
+export LOKALREADER_RVC_USE_INDEX=1   # opt-in; may crash on Mac
+```
+
+Further dependency errors (torch, hubert, rmvpe) are reported in the API toast — re-run `make setup-voices` if assets are missing.
 
 ## Starter character voices
 

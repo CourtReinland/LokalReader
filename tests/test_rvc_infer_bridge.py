@@ -43,12 +43,29 @@ def test_build_rvc_cmd_uses_module_invocation():
     assert "infer/cli.py" not in " ".join(cmd)
 
 
+def test_resolve_index_args_defaults_to_zero():
+    assert rvc_infer.resolve_index_args(
+        index="/weights/narrator.index", index_rate=0.75, use_index=False
+    ) == ["--index-rate", "0"]
+
+
+def test_resolve_index_args_opt_in(tmp_path: Path):
+    idx = tmp_path / "narrator.index"
+    idx.write_bytes(b"idx")
+    args = rvc_infer.resolve_index_args(index=str(idx), index_rate=0.75, use_index=True)
+    assert args[0] == "--index"
+    assert args[1] == str(idx.resolve())
+    assert args[2:] == ["--index-rate", "0.75"]
+
+
 def test_main_passes_pythonpath_and_module(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     rvc_root = tmp_path / "RVC"
     (rvc_root / "infer").mkdir(parents=True)
     (rvc_root / "infer" / "cli.py").write_text("# stub\n", encoding="utf-8")
     model = tmp_path / "narrator.pth"
     model.write_bytes(b"x")
+    idx = tmp_path / "narrator.index"
+    idx.write_bytes(b"idx")
     src = tmp_path / "in.wav"
     src.write_bytes(b"RIFF" + b"\x00" * 100)
     dst = tmp_path / "out.wav"
@@ -66,6 +83,7 @@ def test_main_passes_pythonpath_and_module(tmp_path: Path, monkeypatch: pytest.M
 
         return P()
 
+    monkeypatch.delenv("LOKALREADER_RVC_USE_INDEX", raising=False)
     monkeypatch.setenv("LOKALREADER_RVC_ROOT", str(rvc_root))
     monkeypatch.setattr(rvc_infer.subprocess, "run", fake_run)
     monkeypatch.setattr(
@@ -79,6 +97,8 @@ def test_main_passes_pythonpath_and_module(tmp_path: Path, monkeypatch: pytest.M
             str(src),
             "--output",
             str(dst),
+            "--index",
+            str(idx),
         ],
     )
 
@@ -87,3 +107,8 @@ def test_main_passes_pythonpath_and_module(tmp_path: Path, monkeypatch: pytest.M
     assert captured["cwd"] == str(rvc_root.resolve())
     assert captured["cmd"][:3] == [sys.executable, "-m", "infer.cli"]
     assert captured["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(rvc_root.resolve())
+    # Default Mac-safe path: never pass FAISS index (avoids faiss-cpu SIGSEGV)
+    assert "--index-rate" in captured["cmd"]
+    rate_i = captured["cmd"].index("--index-rate")
+    assert captured["cmd"][rate_i + 1] == "0"
+    assert "--index" not in captured["cmd"]

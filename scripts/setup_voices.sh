@@ -170,6 +170,8 @@ cat > "$ROOT/.rvc/env.sh" <<EOF
 #
 # scripts/rvc_infer.py invokes: \$LOKALREADER_RVC_PYTHON -m infer.cli
 # with PYTHONPATH prepended to LOKALREADER_RVC_ROOT (required for \`import infer\`).
+# FAISS .index retrieval is off by default (Apple Silicon faiss-cpu SIGSEGV).
+# export LOKALREADER_RVC_USE_INDEX=1
 export LOKALREADER_RVC_ROOT="$RVC_ROOT"
 export LOKALREADER_RVC_VENV="$RVC_VENV"
 export LOKALREADER_RVC_PYTHON="$RVC_PY"
