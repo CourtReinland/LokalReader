@@ -2,7 +2,7 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 /** Piper→RVC is slow — never synthesize a whole novel in one HTTP call. */
-const SYNTH_BATCH_SIZE = 6;
+const SYNTH_BATCH_SIZE = 4;
 const PREFETCH_WHEN_REMAINING = 2;
 
 const state = {
