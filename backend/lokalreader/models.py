@@ -85,6 +85,9 @@ class PlaybackRequest(BaseModel):
     chapter_id: Optional[str] = None
     from_segment_id: Optional[str] = None
     speed: Optional[float] = None
+    # Cap how many segments one HTTP call may synthesize (Piper→RVC is heavy).
+    # Clients should batch (~4–8). Server clamps to SYNTH_BATCH_MAX.
+    limit: Optional[int] = None
 
 
 class SynthesizeResult(BaseModel):

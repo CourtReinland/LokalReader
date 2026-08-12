@@ -141,6 +141,14 @@ class PiperTTSBackend(VoiceBackend):
         )
 
     def synthesize(self, text: str, voice_id: str, out_path: Path, *, speed: float = 1.0) -> Path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        clean = _sanitize_text(text)
+        # Manuscript separators (―, …, *** ) have no phonemes — Piper leaves the WAV
+        # header incomplete ("# channels not specified"). Write silence instead.
+        if not _is_speakable(clean):
+            logger.info("Piper skip non-speech text %r → silence wav", (text or "")[:40])
+            return write_silence_wav(out_path)
+
         status = self.setup_status()
         if not status["available"]:
             raise VoiceSetupError(
@@ -154,25 +162,32 @@ class PiperTTSBackend(VoiceBackend):
                 f"Piper voice '{slug}' not found.",
                 missing=[f"{slug}.onnx (+ .onnx.json) in {self._voices_dir}"],
             )
-        clean = _sanitize_text(text)
-        if not clean:
-            clean = "…"
         voice = self._get_voice(slug, model_path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
         # length_scale: >1 slower; Piper uses length_scale inversely to speaking rate
         length_scale = 1.0 / max(0.5, min(2.0, speed))
         try:
-            from piper.config import SynthesisConfig
+            try:
+                from piper.config import SynthesisConfig
 
-            syn_config = SynthesisConfig(length_scale=length_scale)
-            with wave.open(str(out_path), "wb") as wav_file:
-                voice.synthesize_wav(clean, wav_file, syn_config=syn_config)
-        except ImportError:
-            # Older piper API without SynthesisConfig
-            with wave.open(str(out_path), "wb") as wav_file:
-                voice.synthesize_wav(clean, wav_file)
+                syn_config = SynthesisConfig(length_scale=length_scale)
+                with wave.open(str(out_path), "wb") as wav_file:
+                    voice.synthesize_wav(clean, wav_file, syn_config=syn_config)
+            except ImportError:
+                # Older piper API without SynthesisConfig
+                with wave.open(str(out_path), "wb") as wav_file:
+                    voice.synthesize_wav(clean, wav_file)
+        except Exception as exc:
+            # One bad segment must not 500 an entire playback batch.
+            logger.warning(
+                "Piper failed for %r (%s) — writing silence fallback",
+                clean[:60],
+                exc,
+            )
+            return write_silence_wav(out_path)
+
         if not out_path.exists() or out_path.stat().st_size < 44:
-            raise VoiceSetupError(f"Piper produced empty audio for voice '{slug}'.")
+            logger.warning("Piper produced empty audio for %r — silence fallback", clean[:60])
+            return write_silence_wav(out_path)
         return out_path
 
     def _installed_slugs(self) -> list[str]:
@@ -204,5 +219,35 @@ class PiperTTSBackend(VoiceBackend):
 
 
 def _sanitize_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text or "").strip()
     return text[:4000]
+
+
+def _is_speakable(text: str) -> bool:
+    """True if text has at least one alphanumeric character.
+
+    Punctuation-only manuscript separators (―, —, ***, …) are not speakable and
+    cause Piper to fail with incomplete WAV headers ("# channels not specified").
+    """
+    if not text:
+        return False
+    return any(ch.isalnum() for ch in text)
+
+
+def write_silence_wav(
+    out_path: Path,
+    *,
+    duration_sec: float = 0.35,
+    sample_rate: int = 22050,
+    sample_width: int = 2,
+    channels: int = 1,
+) -> Path:
+    """Write a valid short mono PCM silence WAV (fully specified channels/rate)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    n_frames = max(1, int(sample_rate * duration_sec))
+    with wave.open(str(out_path), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"\x00" * (n_frames * sample_width * channels))
+    return out_path

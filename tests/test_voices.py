@@ -1,10 +1,15 @@
+import wave
 from pathlib import Path
 
 import pytest
 
 from lokalreader import config
 from lokalreader.voices.errors import VoiceSetupError
-from lokalreader.voices.piper_tts import PiperTTSBackend
+from lokalreader.voices.piper_tts import (
+    PiperTTSBackend,
+    _is_speakable,
+    write_silence_wav,
+)
 from lokalreader.voices.rvc import RVCVoiceBackend, rvc_status
 from lokalreader.voices.service import VoiceService
 
@@ -29,6 +34,40 @@ def test_piper_available_and_synthesize(tmp_path: Path):
     backend.synthesize("Hello from LokalReader.", voices[0].id, out, speed=1.0)
     assert out.exists()
     assert out.stat().st_size > 100
+
+
+def test_is_speakable_rejects_separators():
+    assert _is_speakable("Hello")
+    assert _is_speakable("Chapter 12")
+    assert not _is_speakable("")
+    assert not _is_speakable("―")
+    assert not _is_speakable("—")
+    assert not _is_speakable("…")
+    assert not _is_speakable("***")
+    assert not _is_speakable("  ―  ")
+    assert not _is_speakable("*** * ―")
+
+
+def test_write_silence_wav_has_channels(tmp_path: Path):
+    out = tmp_path / "silence.wav"
+    write_silence_wav(out, duration_sec=0.2)
+    with wave.open(str(out), "rb") as wf:
+        assert wf.getnchannels() == 1
+        assert wf.getsampwidth() == 2
+        assert wf.getframerate() == 22050
+        assert wf.getnframes() > 0
+
+
+def test_piper_separator_segment_writes_silence(tmp_path: Path):
+    """Regression: manuscript '―' must not 500 with '# channels not specified'."""
+    backend = PiperTTSBackend()
+    # Silence path does not require Piper to be installed
+    out = tmp_path / "sep.wav"
+    backend.synthesize("―", "piper:en_US-lessac-medium", out)
+    assert out.exists()
+    with wave.open(str(out), "rb") as wf:
+        assert wf.getnchannels() == 1
+        assert wf.getnframes() > 0
 
 
 def test_rvc_status_shape():
