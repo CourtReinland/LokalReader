@@ -151,6 +151,7 @@ HuBERT + RMVPE come from [`lj1995/VoiceConversionWebUI`](https://huggingface.co/
 - Fiction: map different RVC models to Narrator + each character
 - Nonfiction: single narrator voice
 - Missing weights/TTS → HTTP 503 with an explicit “run `make setup-voices`” message (shown in the web UI toast)
+- Playback synthesizes in **small batches** (≈6 segments via `segment_ids` + `limit`); the UI prefetches the next batch as the queue runs low. Open-ended `from_segment_id` without `limit` is server-capped so a long novel cannot trigger thousands of RVC subprocesses in one HTTP call.
 
 ## Project layout
 
@@ -196,10 +197,11 @@ Makefile                 make install | setup-voices | run | test | demo
 3. Open the app → **Try the sample scene**.
 4. Confirm **fiction**, speakers such as Mara / Eli visible.
 5. **Voices** panel lists `rvc:…` only (no `mac:*`). Piper + RVC status shows ready.
-6. Press Play — narration and dialogue use different RVC timbres.
+6. Press Play — narration and dialogue use different RVC timbres; audio should start after the first small batch (not after the whole book synthesizes).
 7. Change Eli’s voice, Save, Stop, Play again from a dialogue line.
 8. Drop `samples/nonfiction_note.md` — **nonfiction**, single narrator voice.
 9. With weights removed, Play must fail with a clear “run `make setup-voices`” style error — never Samantha.
+10. On a long book (1000+ segments), Play must not hang/timeout on one giant synthesize call; Network tab should show repeated `/api/playback/synthesize` batches.
 
 Automated: `make test` (Piper + RVC stub wiring).
 

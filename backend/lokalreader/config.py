@@ -51,6 +51,10 @@ ALLOW_EMERGENCY_TTS = os.environ.get("LOKALREADER_ALLOW_EMERGENCY_TTS", "").stri
 
 DEFAULT_RATE = 1.0
 
+# Playback synthesize batching — Piper→RVC must not convert an entire novel in one request.
+SYNTH_BATCH_DEFAULT = int(os.environ.get("LOKALREADER_SYNTH_BATCH_DEFAULT", "8"))
+SYNTH_BATCH_MAX = int(os.environ.get("LOKALREADER_SYNTH_BATCH_MAX", "16"))
+
 
 def ensure_dirs() -> None:
     for path in (DATA_DIR, BOOKS_DIR, AUDIO_DIR, MAPPINGS_DIR, RVC_WEIGHTS, PIPER_VOICES_DIR):

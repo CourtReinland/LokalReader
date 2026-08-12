@@ -119,18 +119,28 @@ def synthesize(req: PlaybackRequest) -> dict:
         mapping = voices.default_mapping_for(req.book_id, doc.meta.character_names)
         library.save_mapping(mapping)
 
-    segs = doc.segments
+    all_segs = doc.segments
     if req.segment_ids:
-        wanted = set(req.segment_ids)
-        segs = [s for s in segs if s.id in wanted]
+        by_id = {s.id: s for s in all_segs}
+        # Preserve client order; skip unknown ids
+        segs = [by_id[i] for i in req.segment_ids if i in by_id]
     elif req.chapter_id:
-        segs = [s for s in segs if s.chapter_id == req.chapter_id]
+        segs = [s for s in all_segs if s.chapter_id == req.chapter_id]
     elif req.from_segment_id:
-        start = next((i for i, s in enumerate(segs) if s.id == req.from_segment_id), 0)
-        segs = segs[start:]
+        start = next((i for i, s in enumerate(all_segs) if s.id == req.from_segment_id), 0)
+        segs = all_segs[start:]
+    else:
+        segs = list(all_segs)
+
+    # Clamp batch size — never convert hundreds of Piper→RVC segments in one HTTP call.
+    limit = _resolve_synth_limit(req)
+    total_matched = len(segs)
+    batch = segs[:limit]
+    remainder = segs[limit:]
+    next_from = remainder[0].id if remainder else None
 
     results = []
-    for seg in segs:
+    for seg in batch:
         try:
             result = voices.synthesize_segment(req.book_id, seg, mapping, speed=req.speed)
             results.append(result.model_dump())
@@ -140,8 +150,39 @@ def synthesize(req: PlaybackRequest) -> dict:
                 str(exc),
             ) from exc
         except Exception as exc:
-            raise HTTPException(500, f"TTS failed for segment {seg.id}: {exc}") from exc
-    return {"segments": results, "count": len(results)}
+            # Do not tear down the process; return a clear per-segment failure.
+            raise HTTPException(
+                500,
+                f"TTS failed for segment {seg.id}: {exc}. "
+                f"Try a smaller batch (limit≤{config.SYNTH_BATCH_DEFAULT}) or check RVC setup.",
+            ) from exc
+    return {
+        "segments": results,
+        "count": len(results),
+        "limit": limit,
+        "total_matched": total_matched,
+        "has_more": bool(remainder),
+        "next_from_segment_id": next_from,
+    }
+
+
+def _resolve_synth_limit(req: PlaybackRequest) -> int:
+    """Clamp request limit; default-cap open-ended from_segment_id / chapter slices."""
+    max_n = max(1, config.SYNTH_BATCH_MAX)
+    default_n = max(1, min(config.SYNTH_BATCH_DEFAULT, max_n))
+    if req.limit is not None:
+        try:
+            n = int(req.limit)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "limit must be an integer") from exc
+        if n < 1:
+            raise HTTPException(400, "limit must be >= 1")
+        return min(n, max_n)
+    # Explicit id list: allow up to max (client already batched)
+    if req.segment_ids is not None:
+        return min(len(req.segment_ids), max_n)
+    # Open-ended ranges without limit — protect server/old clients
+    return default_n
 
 
 @router.get("/audio/{book_id}/{filename}")

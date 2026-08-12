@@ -56,3 +56,56 @@ def test_voices_status_has_setup_fields():
     assert "missing" in data
     assert "setup_hint" in data or data.get("ready") is True
     assert "Samantha" not in (data.get("rvc") or {}).get("note", "")
+
+
+def test_synthesize_respects_limit_and_has_more():
+    """from_segment_id must not convert the whole book in one call."""
+    client = TestClient(app)
+    with (SAMPLES / "the_quiet_carriage.txt").open("rb") as fh:
+        res = client.post("/api/books", files={"file": ("the_quiet_carriage.txt", fh, "text/plain")})
+    assert res.status_code == 200, res.text
+    book = res.json()["book"]
+    book_id = book["meta"]["id"]
+    segs = book["segments"]
+    assert len(segs) >= 2
+
+    first_id = segs[0]["id"]
+    limited = client.post(
+        "/api/playback/synthesize",
+        json={"book_id": book_id, "from_segment_id": first_id, "limit": 1, "speed": 1.0},
+    )
+    assert limited.status_code == 200, limited.text
+    body = limited.json()
+    assert body["count"] == 1
+    assert body["limit"] == 1
+    assert body["total_matched"] == len(segs)
+    assert body["has_more"] is True
+    assert body["next_from_segment_id"] == segs[1]["id"]
+    assert body["segments"][0]["segment_id"] == first_id
+
+    # Open-ended from_segment_id without limit is still capped (default batch)
+    uncapped = client.post(
+        "/api/playback/synthesize",
+        json={"book_id": book_id, "from_segment_id": first_id, "speed": 1.0},
+    )
+    assert uncapped.status_code == 200, uncapped.text
+    ubody = uncapped.json()
+    assert ubody["count"] <= ubody["limit"]
+    assert ubody["count"] < len(segs) or not ubody["has_more"]
+
+
+def test_synthesize_segment_ids_batch():
+    client = TestClient(app)
+    with (SAMPLES / "the_quiet_carriage.txt").open("rb") as fh:
+        res = client.post("/api/books", files={"file": ("the_quiet_carriage.txt", fh, "text/plain")})
+    book = res.json()["book"]
+    ids = [s["id"] for s in book["segments"][:3]]
+    synth = client.post(
+        "/api/playback/synthesize",
+        json={"book_id": book["meta"]["id"], "segment_ids": ids, "limit": 6, "speed": 1.0},
+    )
+    assert synth.status_code == 200, synth.text
+    body = synth.json()
+    assert body["count"] == len(ids)
+    assert [s["segment_id"] for s in body["segments"]] == ids
+    assert body["has_more"] is False
