@@ -165,7 +165,11 @@ fi
 
 # Write env hint file
 cat > "$ROOT/.rvc/env.sh" <<EOF
-# Source this or export before make run
+# Source this or export before make run:
+#   source .rvc/env.sh && make run
+#
+# scripts/rvc_infer.py invokes: \$LOKALREADER_RVC_PYTHON -m infer.cli
+# with PYTHONPATH prepended to LOKALREADER_RVC_ROOT (required for \`import infer\`).
 export LOKALREADER_RVC_ROOT="$RVC_ROOT"
 export LOKALREADER_RVC_VENV="$RVC_VENV"
 export LOKALREADER_RVC_PYTHON="$RVC_PY"

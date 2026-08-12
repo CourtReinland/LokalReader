@@ -50,7 +50,7 @@ Book file
   → chapter split + fiction/nonfiction heuristic
   → segmenter (narration / dialogue + speaker labels)
   → PiperTTSBackend.synthesize(text) → WAV
-  → RVCVoiceBackend (Python 3.12 subprocess → infer/cli.py)
+  → RVCVoiceBackend (Python 3.12 subprocess → python -m infer.cli)
        loads .pth (+ optional .index), hubert + rmvpe
   → browser <audio> queue
 ```
@@ -72,10 +72,34 @@ macOS system voices and espeak are **not** listed in `/api/voices` and are never
 | `LOKALREADER_RVC_PYTHON` | `.venv-rvc/bin/python` | Interpreter for infer |
 | `LOKALREADER_RVC_WEIGHTS` | `data/rvc_weights` | Character `.pth` / `.index` |
 | `LOKALREADER_PIPER_VOICES` | `data/piper_voices` | Piper `.onnx` voices |
-| `LOKALREADER_RVC_INFER_SCRIPT` | `scripts/rvc_infer.py` | Bridge to `infer/cli.py` |
+| `LOKALREADER_RVC_INFER_SCRIPT` | `scripts/rvc_infer.py` | Bridge to `python -m infer.cli` |
 | `LOKALREADER_ALLOW_EMERGENCY_TTS` | off | If `1`, expose labeled `piper:*` emergency voices (CI/dev only) |
 
 `make setup-voices` writes `.rvc/env.sh`; `make run` sources it when present.
+
+```bash
+# After setup, always load the RVC env before run (or rely on make run):
+source .rvc/env.sh
+make run
+```
+
+### Troubleshooting RVC (`No module named 'infer'`)
+
+`scripts/rvc_infer.py` must invoke RVC as a package from the WebUI checkout:
+
+- cwd = `LOKALREADER_RVC_ROOT`
+- `PYTHONPATH` prepends that root
+- command = `$LOKALREADER_RVC_PYTHON -m infer.cli …` (not `python infer/cli.py`)
+
+If you still see import errors, confirm:
+
+```bash
+source .rvc/env.sh
+echo "$LOKALREADER_RVC_ROOT" "$LOKALREADER_RVC_PYTHON"
+"$LOKALREADER_RVC_PYTHON" -c "import sys; sys.path.insert(0, '$LOKALREADER_RVC_ROOT'); import infer.cli; print('infer ok')"
+```
+
+Further dependency errors (torch, hubert, rmvpe, faiss) are reported in the API toast — re-run `make setup-voices` if assets are missing.
 
 ## Starter character voices
 
@@ -127,7 +151,7 @@ frontend/                Local web UI
 samples/                 Fiction + nonfiction demos
 scripts/
   setup_voices.sh        make setup-voices
-  rvc_infer.py           Bridge → RVC infer/cli.py (Python 3.12)
+  rvc_infer.py           Bridge → python -m infer.cli (PYTHONPATH=RVC root)
   rvc_infer_stub.py      CI passthrough only (not real conversion)
   download_starter_voices.py
 data/rvc_weights/        Your .pth models (gitignored)
