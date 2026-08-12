@@ -1,10 +1,11 @@
+import wave
 from pathlib import Path
 
 import pytest
 
 from lokalreader import config
 from lokalreader.voices.errors import VoiceSetupError
-from lokalreader.voices.piper_tts import PiperTTSBackend
+from lokalreader.voices.piper_tts import PiperTTSBackend, _sanitize_text, _write_silence
 from lokalreader.voices.rvc import RVCVoiceBackend, rvc_status
 from lokalreader.voices.service import VoiceService
 
@@ -29,6 +30,41 @@ def test_piper_available_and_synthesize(tmp_path: Path):
     backend.synthesize("Hello from LokalReader.", voices[0].id, out, speed=1.0)
     assert out.exists()
     assert out.stat().st_size > 100
+
+
+def test_sanitize_text_rejects_separators():
+    assert _sanitize_text("Hello") == "Hello"
+    assert _sanitize_text("Chapter 12") == "Chapter 12"
+    assert _sanitize_text("café") == "café"  # Latin-1 letter
+    assert _sanitize_text("") == ""
+    assert _sanitize_text("---") == ""
+    assert _sanitize_text("―") == ""
+    assert _sanitize_text("—") == ""
+    assert _sanitize_text("…") == ""
+    assert _sanitize_text("***") == ""
+    assert _sanitize_text("  ―  ") == ""
+
+
+def test_write_silence_has_channels(tmp_path: Path):
+    out = tmp_path / "silence.wav"
+    _write_silence(out, seconds=0.25, rate=22050)
+    with wave.open(str(out), "rb") as wf:
+        assert wf.getnchannels() == 1
+        assert wf.getsampwidth() == 2
+        assert wf.getframerate() == 22050
+        assert wf.getnframes() > 0
+
+
+def test_piper_separator_writes_silence_not_ellipsis(tmp_path: Path):
+    """Regression: '―' / '---' must not 500 with '# channels not specified'."""
+    backend = PiperTTSBackend()
+    for text in ("―", "---", "***"):
+        out = tmp_path / f"sep_{hash(text)}.wav"
+        backend.synthesize(text, "piper:en_US-lessac-medium", out)
+        assert out.exists()
+        with wave.open(str(out), "rb") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getnframes() > 0
 
 
 def test_rvc_status_shape():

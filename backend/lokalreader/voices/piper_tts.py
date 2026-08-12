@@ -141,6 +141,14 @@ class PiperTTSBackend(VoiceBackend):
         )
 
     def synthesize(self, text: str, voice_id: str, out_path: Path, *, speed: float = 1.0) -> Path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        clean = _sanitize_text(text)
+        # Separators (---, ―, …) have no phonemes — Piper leaves broken WAV headers
+        # ("# channels not specified"). Never substitute "…"; write silence instead.
+        if not clean:
+            logger.info("Piper skip non-speech text %r → silence", (text or "")[:40])
+            return _write_silence(out_path)
+
         status = self.setup_status()
         if not status["available"]:
             raise VoiceSetupError(
@@ -154,25 +162,27 @@ class PiperTTSBackend(VoiceBackend):
                 f"Piper voice '{slug}' not found.",
                 missing=[f"{slug}.onnx (+ .onnx.json) in {self._voices_dir}"],
             )
-        clean = _sanitize_text(text)
-        if not clean:
-            clean = "…"
         voice = self._get_voice(slug, model_path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
         # length_scale: >1 slower; Piper uses length_scale inversely to speaking rate
         length_scale = 1.0 / max(0.5, min(2.0, speed))
         try:
-            from piper.config import SynthesisConfig
+            try:
+                from piper.config import SynthesisConfig
 
-            syn_config = SynthesisConfig(length_scale=length_scale)
-            with wave.open(str(out_path), "wb") as wav_file:
-                voice.synthesize_wav(clean, wav_file, syn_config=syn_config)
-        except ImportError:
-            # Older piper API without SynthesisConfig
-            with wave.open(str(out_path), "wb") as wav_file:
-                voice.synthesize_wav(clean, wav_file)
+                syn_config = SynthesisConfig(length_scale=length_scale)
+                with wave.open(str(out_path), "wb") as wav_file:
+                    voice.synthesize_wav(clean, wav_file, syn_config=syn_config)
+            except ImportError:
+                with wave.open(str(out_path), "wb") as wav_file:
+                    voice.synthesize_wav(clean, wav_file)
+        except Exception as exc:
+            # One glyph/segment must not 500 an entire playback batch.
+            logger.warning("Piper failed for %r (%s) — silence fallback", clean[:60], exc)
+            return _write_silence(out_path)
+
         if not out_path.exists() or out_path.stat().st_size < 44:
-            raise VoiceSetupError(f"Piper produced empty audio for voice '{slug}'.")
+            logger.warning("Piper empty output for %r — silence fallback", clean[:60])
+            return _write_silence(out_path)
         return out_path
 
     def _installed_slugs(self) -> list[str]:
@@ -204,5 +214,26 @@ class PiperTTSBackend(VoiceBackend):
 
 
 def _sanitize_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", text).strip()
-    return text[:4000]
+    """Normalize whitespace; return "" when there is no alphanumeric content.
+
+    Punctuation-only manuscript separators (---, ―, …, ***) are not speakable.
+    Includes Latin-1 / Unicode letters via str.isalnum().
+    """
+    text = re.sub(r"\s+", " ", text or "").strip()[:4000]
+    if not text:
+        return ""
+    if not any(ch.isalnum() for ch in text):
+        return ""
+    return text
+
+
+def _write_silence(out_path: Path, seconds: float = 0.25, rate: int = 22050) -> Path:
+    """Write a valid short mono 16-bit PCM silence WAV (channels fully specified)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    n_frames = max(1, int(rate * seconds))
+    with wave.open(str(out_path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(rate)
+        wav_file.writeframes(b"\x00" * (n_frames * 2))
+    return out_path

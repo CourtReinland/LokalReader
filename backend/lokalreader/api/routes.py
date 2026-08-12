@@ -119,15 +119,18 @@ def synthesize(req: PlaybackRequest) -> dict:
         mapping = voices.default_mapping_for(req.book_id, doc.meta.character_names)
         library.save_mapping(mapping)
 
-    segs = doc.segments
+    all_segs = doc.segments
     if req.segment_ids:
-        wanted = set(req.segment_ids)
-        segs = [s for s in segs if s.id in wanted]
+        by_id = {s.id: s for s in all_segs}
+        # Preserve client order (batched playback sends a short ordered list).
+        segs = [by_id[i] for i in req.segment_ids if i in by_id]
     elif req.chapter_id:
-        segs = [s for s in segs if s.chapter_id == req.chapter_id]
+        segs = [s for s in all_segs if s.chapter_id == req.chapter_id]
     elif req.from_segment_id:
-        start = next((i for i, s in enumerate(segs) if s.id == req.from_segment_id), 0)
-        segs = segs[start:]
+        start = next((i for i, s in enumerate(all_segs) if s.id == req.from_segment_id), 0)
+        segs = all_segs[start:]
+    else:
+        segs = list(all_segs)
 
     results = []
     for seg in segs:

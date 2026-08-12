@@ -1,6 +1,10 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/** Piper→RVC is slow — never synthesize a whole novel in one HTTP call. */
+const BATCH_SIZE = 4;
+const PREFETCH_WHEN_REMAINING = 2;
+
 const state = {
   book: null,
   mapping: null,
@@ -11,6 +15,11 @@ const state = {
   playing: false,
   activeChapter: null,
   preparing: false,
+  prefetching: false,
+  /** Next index into book.segments to fetch */
+  playCursor: 0,
+  /** Bumped on stop / new playFrom to ignore stale prefetch results */
+  playGen: 0,
 };
 
 const els = {
@@ -298,38 +307,111 @@ async function playFrom(segmentId = null) {
     await els.audio.play();
     state.playing = true;
     els.play.textContent = "❚❚";
+    maybePrefetch();
     return;
   }
 
   const fromId = segmentId || state.book.segments[0]?.id;
   if (!fromId) return;
+  const startIdx = state.book.segments.findIndex((s) => s.id === fromId);
+  if (startIdx < 0) return;
+
+  state.playGen += 1;
+  const gen = state.playGen;
+  state.playCursor = startIdx;
+  state.queue = [];
+  state.queueIndex = 0;
+  state.prefetching = false;
   state.preparing = true;
   els.now.textContent = "Synthesizing…";
   els.play.textContent = "…";
   try {
-    const data = await api("/api/playback/synthesize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        book_id: state.book.meta.id,
-        from_segment_id: fromId,
-        chapter_id: null,
-        speed: Number(els.speed.value),
-      }),
-    });
-    state.queue = data.segments;
-    state.queueIndex = 0;
+    const ok = await fetchNextBatch(gen);
+    if (!ok || gen !== state.playGen) return;
+    if (!state.queue.length) {
+      els.now.textContent = "Nothing to play";
+      els.play.textContent = "▶";
+      return;
+    }
     await playQueueItem();
+    maybePrefetch();
   } catch (err) {
+    if (gen !== state.playGen) return;
     toast(err.message || String(err));
     els.play.textContent = "▶";
     els.now.textContent = "TTS error";
   } finally {
-    state.preparing = false;
+    if (gen === state.playGen) state.preparing = false;
   }
 }
 
+/** Synthesize the next BATCH_SIZE segments via segment_ids — never EOF. */
+async function fetchNextBatch(gen) {
+  const bookSegs = state.book?.segments || [];
+  if (state.playCursor >= bookSegs.length) return false;
+  const slice = bookSegs.slice(state.playCursor, state.playCursor + BATCH_SIZE);
+  if (!slice.length) return false;
+  const data = await api("/api/playback/synthesize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      book_id: state.book.meta.id,
+      segment_ids: slice.map((s) => s.id),
+      speed: Number(els.speed.value),
+    }),
+  });
+  if (gen !== state.playGen) return false;
+  const items = data.segments || [];
+  state.queue.push(...items);
+  state.playCursor += slice.length;
+  return items.length > 0;
+}
+
+function remainingInQueue() {
+  if (state.queueIndex < 0) return 0;
+  return Math.max(0, state.queue.length - state.queueIndex);
+}
+
+function maybePrefetch() {
+  if (state.prefetching || state.preparing) return;
+  if (!state.book?.segments?.length) return;
+  if (state.playCursor >= state.book.segments.length) return;
+  if (remainingInQueue() > PREFETCH_WHEN_REMAINING) return;
+  const gen = state.playGen;
+  state.prefetching = true;
+  fetchNextBatch(gen)
+    .catch((err) => {
+      if (gen === state.playGen) toast(err.message || String(err));
+    })
+    .finally(() => {
+      if (gen === state.playGen) state.prefetching = false;
+    });
+}
+
 async function playQueueItem() {
+  if (state.queueIndex >= state.queue.length) {
+    if (state.playCursor < (state.book?.segments?.length || 0)) {
+      const gen = state.playGen;
+      els.now.textContent = "Synthesizing…";
+      try {
+        const ok = await fetchNextBatch(gen);
+        if (!ok || gen !== state.playGen) {
+          stopPlayback();
+          els.now.textContent = "Finished";
+          return;
+        }
+      } catch (err) {
+        toast(err.message || String(err));
+        stopPlayback();
+        els.now.textContent = "TTS error";
+        return;
+      }
+    } else {
+      stopPlayback();
+      els.now.textContent = "Finished";
+      return;
+    }
+  }
   if (state.queueIndex < 0 || state.queueIndex >= state.queue.length) {
     stopPlayback();
     els.now.textContent = "Finished";
@@ -342,6 +424,7 @@ async function playQueueItem() {
     await els.audio.play();
     state.playing = true;
     els.play.textContent = "❚❚";
+    maybePrefetch();
   } catch (err) {
     toast("Could not play audio — check browser autoplay settings");
     state.playing = false;
@@ -350,18 +433,23 @@ async function playQueueItem() {
 }
 
 function stopPlayback() {
+  state.playGen += 1;
   els.audio.pause();
   els.audio.removeAttribute("src");
   els.audio.load();
   state.playing = false;
   state.queue = [];
   state.queueIndex = -1;
+  state.playCursor = 0;
+  state.prefetching = false;
+  state.preparing = false;
   els.play.textContent = "▶";
   els.now.textContent = "Stopped";
 }
 
 els.audio.addEventListener("ended", () => {
   state.queueIndex += 1;
+  maybePrefetch();
   playQueueItem();
 });
 
