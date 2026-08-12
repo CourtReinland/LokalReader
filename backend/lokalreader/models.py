@@ -70,7 +70,7 @@ class VoiceMapping(BaseModel):
     narrator_voice: str
     character_voices: dict[str, str] = Field(default_factory=dict)
     speed: float = 1.0
-    use_rvc: bool = False
+    use_rvc: bool = True
 
 
 class SegmentUpdate(BaseModel):

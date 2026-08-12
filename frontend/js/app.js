@@ -27,7 +27,7 @@ const els = {
   voicePanel: $("#voice-panel"),
   narratorVoice: $("#narrator-voice"),
   characterVoices: $("#character-voices"),
-  useRvc: $("#use-rvc"),
+  voiceStatus: $("#voice-status"),
   rvcHint: $("#rvc-hint"),
   audio: $("#audio"),
   play: $("#btn-play"),
@@ -66,11 +66,23 @@ async function loadVoices() {
   const data = await api("/api/voices");
   state.voices = data.voices || [];
   state.rvc = data.rvc;
+  state.voiceStatus = data;
+  if (els.voiceStatus) {
+    if (data.ready) {
+      els.voiceStatus.textContent = `Ready — Piper + RVC (${(data.rvc?.weights || []).length} model(s)).`;
+    } else {
+      const missing = (data.missing || []).slice(0, 3).join(" · ");
+      els.voiceStatus.textContent =
+        data.setup_hint ||
+        `Setup needed${missing ? `: ${missing}` : ""}. Run make setup-voices.`;
+    }
+  }
   if (els.rvcHint) {
     const n = (data.rvc?.weights || []).length;
+    const stateLabel = data.rvc?.state || (data.rvc?.available ? "ready" : "not ready");
     els.rvcHint.textContent = data.rvc?.available
-      ? `RVC ready — ${n} model(s) in ${data.rvc.weights_dir}`
-      : `RVC optional — ${data.rvc?.note || "using LocalTTS voice variants."}`;
+      ? `RVC ${stateLabel} — ${n} model(s) in ${data.rvc.weights_dir}`
+      : `RVC ${stateLabel} — ${data.rvc?.setup_hint || data.rvc?.note || "run make setup-voices"}`;
   }
 }
 
@@ -211,22 +223,32 @@ function escapeAttr(s) {
 function renderVoicePanel() {
   const voices = state.voices;
   const mapping = state.mapping;
-  const opts = voices
+  let opts = voices
     .map((v) => `<option value="${escapeAttr(v.id)}">${escapeHtml(v.name)} (${v.engine})</option>`)
     .join("");
+  if (!opts) {
+    opts = `<option value="">No RVC models — run make setup-voices</option>`;
+  }
   els.narratorVoice.innerHTML = opts;
   if (mapping.narrator_voice) els.narratorVoice.value = mapping.narrator_voice;
-  els.useRvc.checked = !!mapping.use_rvc;
 
   const chars = state.book.meta.character_names || [];
   els.characterVoices.innerHTML = "";
-  for (const name of chars) {
-    const label = document.createElement("label");
-    label.className = "field";
-    label.innerHTML = `<span>${escapeHtml(name)}</span><select data-char="${escapeAttr(name)}">${opts}</select>`;
-    const select = $("select", label);
-    if (mapping.character_voices?.[name]) select.value = mapping.character_voices[name];
-    els.characterVoices.append(label);
+  // Fiction: per-character RVC models. Nonfiction: narrator only (no character rows).
+  if ((state.book.meta.kind || "") === "nonfiction") {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "Nonfiction uses a single narrator RVC voice.";
+    els.characterVoices.append(note);
+  } else {
+    for (const name of chars) {
+      const label = document.createElement("label");
+      label.className = "field";
+      label.innerHTML = `<span>${escapeHtml(name)}</span><select data-char="${escapeAttr(name)}">${opts}</select>`;
+      const select = $("select", label);
+      if (mapping.character_voices?.[name]) select.value = mapping.character_voices[name];
+      els.characterVoices.append(label);
+    }
   }
 }
 
@@ -240,7 +262,7 @@ async function saveVoices() {
     narrator_voice: els.narratorVoice.value,
     character_voices,
     speed: Number(els.speed.value),
-    use_rvc: els.useRvc.checked,
+    use_rvc: true,
   };
   state.mapping = await api(`/api/books/${state.book.meta.id}/mapping`, {
     method: "PUT",
