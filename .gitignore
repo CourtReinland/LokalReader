@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+data/books/
+data/audio/
+data/mappings/
+data/rvc_weights/*.pth
+!data/rvc_weights/.gitkeep
+*.egg-info/
+dist/
+build/
+.env

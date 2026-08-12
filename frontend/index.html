@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LokalReader — local books that speak</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <!-- Landing / library -->
+  <section id="view-home" class="view view-home">
+    <header class="topbar">
+      <a class="brand-mark" href="/" aria-label="LokalReader home">LokalReader</a>
+      <nav class="topnav">
+        <button type="button" class="linkish" id="btn-show-library">Library</button>
+        <a class="linkish" href="https://github.com/CourtReinland/LokalReader" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </header>
+
+    <div class="hero">
+      <div class="hero-copy">
+        <p class="brand-hero">LokalReader</p>
+        <h1>Books that speak — on your machine, not in the cloud.</h1>
+        <p class="lede">Drop a novel or essay. Hear narration and dialogue in distinct local voices. No subscription. No account.</p>
+        <div class="cta-row">
+          <label class="btn primary" for="file-input">Open a book</label>
+          <button type="button" class="btn ghost" id="btn-sample">Try the sample scene</button>
+        </div>
+        <p class="formats">txt · md · pdf · epub · docx</p>
+      </div>
+      <div class="hero-visual" role="img" aria-label="Open book in soft window light">
+        <div class="hero-sheen"></div>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <p>Or drag & drop a book file here</p>
+    </div>
+
+    <section class="library-panel" id="library-panel" hidden>
+      <h2>Your library</h2>
+      <ul id="library-list" class="library-list"></ul>
+    </section>
+  </section>
+
+  <!-- Reader -->
+  <section id="view-reader" class="view view-reader" hidden>
+    <header class="reader-bar">
+      <button type="button" class="btn ghost compact" id="btn-back">← Library</button>
+      <div class="reader-title-block">
+        <p class="brand-inline">LokalReader</p>
+        <h1 id="book-title">Untitled</h1>
+        <p class="meta" id="book-meta"></p>
+      </div>
+      <button type="button" class="btn ghost compact" id="btn-voices">Voices</button>
+    </header>
+
+    <div class="reader-layout">
+      <aside class="chapters" id="chapter-list" aria-label="Chapters"></aside>
+
+      <main class="script" id="script" tabindex="0" aria-live="polite"></main>
+
+      <aside class="voice-panel" id="voice-panel" hidden>
+        <h2>Voice mapping</h2>
+        <p class="hint">Assign a local voice to the narrator and each detected character. Edits save per book.</p>
+        <label class="field">
+          <span>Narrator</span>
+          <select id="narrator-voice"></select>
+        </label>
+        <div id="character-voices"></div>
+        <label class="field checkbox">
+          <input type="checkbox" id="use-rvc" />
+          <span>Prefer RVC models when available</span>
+        </label>
+        <p class="hint" id="rvc-hint"></p>
+        <button type="button" class="btn primary compact" id="btn-save-voices">Save mapping</button>
+      </aside>
+    </div>
+
+    <footer class="transport">
+      <div class="transport-inner">
+        <button type="button" class="icon-btn" id="btn-stop" title="Stop" aria-label="Stop">■</button>
+        <button type="button" class="icon-btn play" id="btn-play" title="Play / Pause" aria-label="Play">▶</button>
+        <label class="speed">
+          <span>Speed</span>
+          <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1" />
+          <output id="speed-out">1.00×</output>
+        </label>
+        <p class="now-playing" id="now-playing">Ready</p>
+      </div>
+      <audio id="audio" preload="auto"></audio>
+    </footer>
+  </section>
+
+  <input type="file" id="file-input" accept=".txt,.md,.markdown,.pdf,.epub,.docx" hidden />
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
